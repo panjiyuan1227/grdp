@@ -83,8 +83,8 @@ func appMain(driver gxui.Driver) {
 	user.SetDesiredWidth(width / 4)
 	passwd.SetDesiredWidth(width / 4)
 	//ip.SetText("192.168.18.100:5902")
-	ip.SetText("192.168.0.132:3389")
-	user.SetText("administrator")
+	ip.SetText("10.45.18.65:3389")
+	user.SetText("wxh")
 	passwd.SetText("Jhadmin123")
 	//passwd.SetText("wren")
 

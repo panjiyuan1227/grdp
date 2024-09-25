@@ -8,7 +8,7 @@ import (
 )
 
 func TestClient(t *testing.T) {
-	c := NewClient("192.168.0.132:3389", "administrator", "Jhadmin123", TC_RDP, nil)
+	c := NewClient("10.45.18.65:3389", "wxh", "Jhadmin123", TC_RDP, nil)
 	err := c.Login()
 	if err != nil {
 		fmt.Println("Login:", err)

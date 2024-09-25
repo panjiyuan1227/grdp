@@ -211,18 +211,30 @@
 			// start connection
 			var self = this;
 			var url = window.location.protocol + "//" + window.location.host;
-			console.log(url, path)
+			console.log('925',url, path)
 			this.socket = io(url, { "path": path }).on('rdp-connect', function() {
 				// this event can be occured twice (RDP protocol stack artefact)
-				console.log('[mstsc.js] connected');
+				console.log('[mstsc.js] connected925');
 				self.activeSession = true;
+				self.socket.emit('infos', {
+					ip : ip, 
+					port : port, 
+					screen : { 
+						width : self.canvas.width, 
+						height : self.canvas.height 
+					}, 
+					domain : domain, 
+					username : username, 
+					password : password, 
+					locale : Mstsc.locale()
+				});
 			}).on('rdp-bitmap', function(bitmaps) {
 				for (var i in bitmaps)
 				{ 
 					var bitmap = bitmaps[i];
 					bitmap["data"] = parse(bitmaps[i].data)
 					console.log(bitmap);
-					console.log('[mstsc.js] bitmap update:' + bitmap.bitsPerPixel);
+					console.log('[mstsc.js] bitmap update925:' + bitmap.bitsPerPixel);
 					self.render.update(bitmap);
 				}
 			}).on('rdp-close', function() {
@@ -239,18 +251,6 @@
 			console.log("password:");
 			console.log(password);
 			// emit infos event
-			this.socket.emit('infos', {
-				ip : ip, 
-				port : port, 
-				screen : { 
-					width : this.canvas.width, 
-					height : this.canvas.height 
-				}, 
-				domain : domain, 
-				username : username, 
-				password : password, 
-				locale : Mstsc.locale()
-			});
 		}
 	}
 	
