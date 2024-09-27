@@ -85,7 +85,7 @@ func appMain(driver gxui.Driver) {
 	//ip.SetText("192.168.18.100:5902")
 	ip.SetText("10.45.18.65:3389")
 	user.SetText("wxh")
-	passwd.SetText("Jhadmin123")
+	passwd.SetText("wangxh88@Hj")
 	//passwd.SetText("wren")
 
 	bok := theme.CreateButton()
