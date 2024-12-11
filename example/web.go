@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"text/template"
-	"time"
 
 	socketio "github.com/googollee/go-socket.io"
 	"github.com/tomatome/grdp/glog"
@@ -52,7 +51,6 @@ func socketIO() {
 		g.pdu.On("error", func(e error) {
 			fmt.Println("on error:", e)
 			so.Emit("rdp-error", "{\"code\":1,\"message\":\""+e.Error()+"\"}")
-			//wg.Done()
 		}).On("close", func() {
 			err = errors.New("close")
 			fmt.Println("on close")
@@ -61,7 +59,7 @@ func socketIO() {
 		}).On("ready", func() {
 			fmt.Println("on ready")
 		}).On("bitmap", func(rectangles []pdu.BitmapData) {
-			glog.Info(time.Now(), "on update Bitmap:", len(rectangles))
+			// glog.Info(time.Now(), "on update Bitmap:", len(rectangles))
 			bs := make([]Bitmap, 0, len(rectangles))
 			for _, v := range rectangles {
 				IsCompress := v.IsCompress()
@@ -122,8 +120,10 @@ func socketIO() {
 
 	//wheel
 	server.OnEvent("/", "wheel", func(so socketio.Conn, x, y, step uint16, isNegative, isHorizontal bool) {
-		glog.Info("wheel", x, ":", y, ":", step, ":", isNegative, ":", isHorizontal)
+		glog.Info("Received wheel event", x, ":", y, ":", step, ":", isNegative, ":", isHorizontal)
+
 		var p = &pdu.PointerEvent{}
+
 		if isHorizontal {
 			p.PointerFlags |= pdu.PTRFLAGS_HWHEEL
 		} else {
@@ -137,15 +137,41 @@ func socketIO() {
 		p.PointerFlags |= (step & pdu.WheelRotationMask)
 		p.XPos = x
 		p.YPos = y
+
+		// 打印 PointerEvent 内容
+		glog.Info("PointerFlags set to:", p.PointerFlags)
 		g := so.Context().(*RdpClient)
-		g.pdu.SendInputEvents(pdu.INPUT_EVENT_SCANCODE, []pdu.InputEventsInterface{p})
+		if g == nil {
+			glog.Error("Context is nil")
+			return
+		}
+
+		// 发送事件并检查返回值
+		g.pdu.SendInputEvents(pdu.INPUT_EVENT_MOUSE, []pdu.InputEventsInterface{p})
+		// g.pdu.SendInputEvents(pdu.INPUT_EVENT_SCANCODE, []pdu.InputEventsInterface{p})
 	})
 
 	server.OnError("/", func(so socketio.Conn, err error) {
-		if so == nil || so.Context() == nil {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Println("Recovered from panic:", r)
+			}
+		}()
+
+		if so == nil {
+			fmt.Println("Connection is nil")
 			return
 		}
+		ctx := so.Context()
+		if ctx == nil {
+			fmt.Println("Context is nil")
+			return
+		}
+
+		// 处理错误
+		fmt.Println("Error occurred:", err)
 		fmt.Println("error:", err)
+		so.Emit("rdp-error", err)
 		g := so.Context().(*RdpClient)
 		if g != nil {
 			g.tpkt.Close()
@@ -154,7 +180,14 @@ func socketIO() {
 	})
 
 	server.OnDisconnect("/", func(so socketio.Conn, s string) {
-		if so.Context() == nil {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Println("Recovered from panic:", r)
+			}
+		}()
+		if so == nil || so.Context() == nil {
+			so.Close()
+			fmt.Println("OnDisconnect socket close")
 			return
 		}
 		fmt.Println("OnDisconnect:", s)
@@ -167,7 +200,7 @@ func socketIO() {
 		so.Close()
 	})
 	go server.Serve()
-	defer server.Close()
+	// defer server.Close()
 
 	http.Handle("/socket.io/", server)
 

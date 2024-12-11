@@ -243,9 +243,9 @@
 				self.activeSession = false;
 			}).on('rdp-error', function (err) {
 				next(err);
-				console.log(err)
-				console.log('[mstsc.js] error : ' + err["code"] + '(' + err["message"] + ')');
-				alert('error : ' + err["message"])
+				// console.log(err)
+				// console.log('[mstsc.js] error : ' + err["code"] + '(' + err["message"] + ')');
+				// alert('error : ' + err["message"])
 				self.activeSession = false;
 			});
 			console.log("password:");

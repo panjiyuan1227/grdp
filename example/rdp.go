@@ -117,8 +117,8 @@ func (g *RdpClient) Login() error {
 
 	g.mcs.SetClientDesktop(uint16(g.Width), uint16(g.Height))
 	//clipboard
-	//g.channels.Register(cliprdr.NewCliprdrClient())
-	//g.mcs.SetClientCliprdr()
+	g.channels.Register(cliprdr.NewCliprdrClient())
+	g.mcs.SetClientCliprdr()
 
 	//remote app
 	//g.channels.Register(rail.NewClient())
@@ -138,8 +138,8 @@ func (g *RdpClient) Login() error {
 	g.channels.SetChannelSender(g.sec)
 	//g.pdu.SetFastPathSender(g.tpkt)
 
-	//g.x224.SetRequestedProtocol(x224.PROTOCOL_RDP)
-	g.x224.SetRequestedProtocol(x224.PROTOCOL_SSL)
+	g.x224.SetRequestedProtocol(x224.PROTOCOL_RDP)
+	// g.x224.SetRequestedProtocol(x224.PROTOCOL_SSL)
 
 	err = g.x224.Connect()
 	if err != nil {

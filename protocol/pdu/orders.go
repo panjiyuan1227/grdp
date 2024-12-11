@@ -207,13 +207,46 @@ func (o *OrderPdu) processAltsecOrder(r io.Reader) error {
 }
 func (o *OrderPdu) processSecondaryOrder(r io.Reader) error {
 	var sec Secondary
-	length, _ := core.ReadUint16LE(r)
-	flags, _ := core.ReadUint16LE(r)
-	orderType, _ := core.ReadUInt8(r)
+
+	defer func() {
+		if err := recover(); err != nil {
+			glog.Errorf("Recovered from panic: %v", err)
+		}
+	}()
+
+	// 读取长度
+	length, err := core.ReadUint16LE(r)
+	if err != nil {
+		return fmt.Errorf("failed to read length: %w", err)
+	}
+
+	// 读取标志
+	flags, err := core.ReadUint16LE(r)
+	if err != nil {
+		return fmt.Errorf("failed to read flags: %w", err)
+	}
+
+	// 读取订单类型
+	orderType, err := core.ReadUInt8(r)
+	if err != nil {
+		return fmt.Errorf("failed to read order type: %w", err)
+	}
 
 	glog.Info("Secondary:", SecondaryOrderType(orderType))
 
-	b, _ := core.ReadBytes(int(length)+13-6, r)
+	// 计算需要读取的字节数
+	bytesToRead := int(length) + 13 - 6
+	b := make([]byte, bytesToRead)
+
+	// 检查是否能读取足够的数据
+	n, err := io.ReadFull(r, b)
+	if err != nil {
+		return fmt.Errorf("failed to read bytes: %w", err)
+	}
+	if n < bytesToRead {
+		return fmt.Errorf("not enough bytes read: expected %d, got %d", bytesToRead, n)
+	}
+
 	r0 := bytes.NewReader(b)
 
 	switch orderType {
@@ -236,11 +269,12 @@ func (o *OrderPdu) processSecondaryOrder(r io.Reader) error {
 	case ORDER_TYPE_CACHE_BRUSH:
 		sec.updateCacheBrushOrder(r0, flags)
 	default:
-		glog.Debugf("Unsupport order type 0x%x", orderType)
+		glog.Debugf("Unsupported order type 0x%x", orderType)
 	}
 
 	return nil
 }
+
 func (b *Bounds) updateBounds(r io.Reader) {
 	present, _ := core.ReadUInt8(r)
 
@@ -630,7 +664,7 @@ func (d *OpaqueRect) Type() int {
 	return ORDER_TYPE_OPAQUERECT
 }
 func (d *OpaqueRect) Unpack(r io.Reader, present uint32, delta bool) error {
-	glog.Infof("OpaqueRect Order")
+	// glog.Infof("OpaqueRect Order")
 	if present&0x0001 != 0 {
 		readOrderCoord(r, &d.X, delta)
 	}

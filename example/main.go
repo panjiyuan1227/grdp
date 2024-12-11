@@ -22,6 +22,15 @@ func init() {
 	glog.SetLogger(logger)
 }
 
+func safeExecute(fn func()) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered from panic:", r)
+		}
+	}()
+	fn()
+}
+
 func main() {
 	flag.BoolVar(&server, "s", true, "web server")
 	flag.Parse()
@@ -29,7 +38,7 @@ func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 	//web example
 	if server {
-		socketIO()
+		safeExecute(socketIO)
 	} else {
 		//client example
 		StartUI(1520, 1080)
