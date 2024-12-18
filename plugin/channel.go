@@ -165,7 +165,7 @@ typedef UINT VCAPITYPE VIRTUALCHANNELWRITEEX(LPVOID pInitHandle, DWORD openHandl
 typedef VIRTUALCHANNELWRITEEX* PVIRTUALCHANNELWRITEEX;
 */
 
-//static channel name
+// static channel name
 const (
 	CLIPRDR_SVC_CHANNEL_NAME = "cliprdr" //剪切板
 	RDPDR_SVC_CHANNEL_NAME   = "rdpdr"   //设备重定向(打印机，磁盘，端口，智能卡等)
@@ -200,6 +200,9 @@ type ChannelTransport interface {
 	GetType() (string, uint32)
 	Sender(core.ChannelSender)
 	Process(s []byte)
+	Close() bool
+	RemoveListen()
+	RestartListen()
 }
 type ChannelClient struct {
 	ChannelDef
@@ -237,6 +240,29 @@ func (c *Channels) Register(t ChannelTransport) {
 	}
 	t.Sender(c)
 	c.channels[name] = ChannelClient{ChannelDef{name, option}, t}
+}
+
+func (c *Channels) Close() bool {
+	client, exists := c.channels[CLIPRDR_SVC_CHANNEL_NAME]
+	if exists {
+		client.t.Close()
+		delete(c.channels, CLIPRDR_SVC_CHANNEL_NAME)
+	}
+	return true
+}
+
+func (c *Channels) RemoveListen() {
+	client, exists := c.channels[CLIPRDR_SVC_CHANNEL_NAME]
+	if exists {
+		client.t.RemoveListen()
+	}
+}
+
+func (c *Channels) RestartListen() {
+	client, exists := c.channels[CLIPRDR_SVC_CHANNEL_NAME]
+	if exists {
+		client.t.RestartListen()
+	}
 }
 
 func (c *Channels) SendToChannel(channel string, s []byte) (int, error) {
