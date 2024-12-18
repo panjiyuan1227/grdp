@@ -3,6 +3,8 @@ package cliprdr
 
 import (
 	"bytes"
+	"fmt"
+	"sync"
 	"syscall"
 	"unicode/utf16"
 	"unsafe"
@@ -67,6 +69,8 @@ type Control struct {
 	dataObject *IDataObject
 }
 
+var clipboardMutex sync.Mutex
+
 func (c *Control) withOpenClipboard(f func()) {
 	if OpenClipboard(c.hwnd) {
 		f()
@@ -76,29 +80,31 @@ func (c *Control) withOpenClipboard(f func()) {
 func ClipWatcher(c *CliprdrClient) {
 	win.OleInitialize(0)
 	defer win.OleUninitialize()
-	className := syscall.StringToUTF16Ptr("ClipboardHiddenMessageProcessor")
-	windowName := syscall.StringToUTF16Ptr("rdpclip")
+	classNamePtr := fmt.Sprintf("ClipboardHiddenMessageProcessor_%d", c.ID)
+	windowNamePtr := fmt.Sprintf("rdpclip_%d", c.ID)
+	className := syscall.StringToUTF16Ptr(classNamePtr)
+	windowName := syscall.StringToUTF16Ptr(windowNamePtr)
 	wndClassEx := w32.WNDCLASSEX{
 		ClassName: className,
 		WndProc: syscall.NewCallback(func(hwnd w32.HWND, msg uint32, wParam, lParam uintptr) uintptr {
 			switch msg {
 			case w32.WM_CLIPBOARDUPDATE:
-				glog.Info("info: WM_CLIPBOARDUPDATE wParam:", wParam)
-				glog.Debug("IsClipboardOwner:", IsClipboardOwner(win.HWND(c.hwnd)))
+				glog.Info("info: WM_CLIPBOARDUPDATE wParam:", wParam, c.ID)
+				glog.Debug("IsClipboardOwner:", IsClipboardOwner(win.HWND(c.hwnd), c.ID))
 				glog.Debug("OleIsCurrentClipboard:", OleIsCurrentClipboard(c.dataObject))
-				if !IsClipboardOwner(win.HWND(c.hwnd)) && int(wParam) != 0 &&
+				if !IsClipboardOwner(win.HWND(c.hwnd), c.ID) && int(wParam) != 0 &&
 					!OleIsCurrentClipboard(c.dataObject) {
 					c.sendFormatListPDU()
 				}
 
 			case w32.WM_RENDERALLFORMATS:
-				glog.Info("info: WM_RENDERALLFORMATS")
+				glog.Info("info: WM_RENDERALLFORMATS", c.ID)
 				c.withOpenClipboard(func() {
 					EmptyClipboard()
 				})
 
 			case w32.WM_RENDERFORMAT:
-				glog.Info("info: WM_RENDERFORMAT wParam:", wParam)
+				glog.Info("info: WM_RENDERFORMAT wParam:", wParam, c.ID)
 				formatId := uint32(wParam)
 				c.sendFormatDataRequest(formatId)
 				b := <-c.reply
@@ -106,7 +112,7 @@ func ClipWatcher(c *CliprdrClient) {
 				SetClipboardData(formatId, hmem)
 
 			case WM_CLIPRDR_MESSAGE:
-				glog.Info("info: WM_CLIPRDR_MESSAGE wParam:", wParam)
+				glog.Info("info: WM_CLIPRDR_MESSAGE wParam:", wParam, c.ID)
 				if wParam == OLE_SETCLIPBOARD {
 					if !OleIsCurrentClipboard(c.dataObject) {
 						o := CreateDataObject(c)
@@ -135,17 +141,69 @@ func ClipWatcher(c *CliprdrClient) {
 	}
 
 }
+func Stop(c *CliprdrClient) {
+	if c.hwnd != 0 {
+		glog.Info("断开前关闭clipboard监听", c.ID)
+		w32.RemoveClipboardFormatListener(w32.HWND(c.hwnd))
+		// w32.DestroyWindow(w32.HWND(c.hwnd))
+		c.hwnd = 0
+	}
+}
+
+func RemoveListen(c *CliprdrClient) {
+	if c.hwnd != 0 {
+		glog.Info("移除clipboard监听", c.ID)
+		w32.RemoveClipboardFormatListener(w32.HWND(c.hwnd))
+		c.hwnd = 0
+	}
+}
+
+func RestartListen(c *CliprdrClient) {
+	if c.hwnd == 0 {
+		glog.Info("重新开始监听clipboard", c.ID)
+		go ClipWatcher(c)
+	}
+}
 func OpenClipboard(hwnd uintptr) bool {
-	return win.OpenClipboard(win.HWND(hwnd))
+	clipboardMutex.Lock()
+	defer clipboardMutex.Unlock()
+	opened := win.OpenClipboard(win.HWND(hwnd))
+	if !opened {
+		err := syscall.GetLastError()
+		glog.Error("OpenClipboard failed:", err)
+		return false
+	}
+	glog.Info("打开clipboard OpenClipboard")
+	return opened
+	// return win.OpenClipboard(win.HWND(hwnd))
 }
 func CloseClipboard() bool {
-	return win.CloseClipboard()
+	clipboardMutex.Lock()
+	defer clipboardMutex.Unlock()
+	closed := win.CloseClipboard()
+	if !closed {
+		err := syscall.GetLastError()
+		glog.Error("CloseClipboard failed:", err)
+		return false
+	}
+	glog.Info("关闭clipboard CloseClipboard")
+	return closed
+	// return win.CloseClipboard()
+}
+
+func CloseBeforeExist() bool {
+	glog.Info("断开前关闭clipboard>>>>>>>>>")
+	win.EmptyClipboard()
+	win.CloseClipboard()
+	return true
 }
 func CountClipboardFormats() int32 {
 	return win.CountClipboardFormats()
 }
 func IsClipboardFormatAvailable(id uint32) bool {
-	return win.IsClipboardFormatAvailable(win.UINT(id))
+	vailable := win.IsClipboardFormatAvailable(win.UINT(id))
+	glog.Info("判断clipboard是否active IsClipboardFormatAvailable", vailable)
+	return vailable
 }
 func EnumClipboardFormats(formatId uint32) uint32 {
 	id := win.EnumClipboardFormats(win.UINT(formatId))
@@ -157,14 +215,26 @@ func GetClipboardFormatName(id uint32) string {
 	return string(utf16.Decode(buf[:n]))
 }
 func EmptyClipboard() bool {
-	return win.EmptyClipboard()
+	clipboardMutex.Lock()
+	defer clipboardMutex.Unlock()
+	empty := win.EmptyClipboard()
+	if !empty {
+		err := syscall.GetLastError()
+		glog.Error("EmptyClipboard failed:", err)
+		return false
+	}
+	glog.Info("清空clipboard EmptyClipboard")
+	return empty
+	// return win.EmptyClipboard()
 }
 func RegisterClipboardFormat(format string) uint32 {
+	glog.Info("注册clipboard RegisterClipboardFormat")
 	id := win.RegisterClipboardFormat(format)
 	return uint32(id)
 }
-func IsClipboardOwner(h win.HWND) bool {
+func IsClipboardOwner(h win.HWND, id string) bool {
 	hwnd := win.GetClipboardOwner()
+	glog.Info("判断是否为clipboardOwner IsClipboardOwner", h == hwnd, id)
 	return h == hwnd
 }
 
@@ -186,14 +256,18 @@ func HmemAlloc(data []byte) uintptr {
 
 }
 func SetClipboardData(formatId uint32, hmem uintptr) bool {
+	clipboardMutex.Lock()
+	defer clipboardMutex.Unlock()
 	r := win.SetClipboardData(win.UINT(formatId), win.HANDLE(hmem))
 	if r == 0 {
-		//glog.Error("SetClipboardData failed:", formatId, hmem)
+		// glog.Error("SetClipboardData failed:", formatId, hmem)
 		return false
 	}
 	return true
 }
 func GetClipboardData(formatId uint32) string {
+	clipboardMutex.Lock()
+	defer clipboardMutex.Unlock()
 	r := win.GetClipboardData(win.UINT(formatId))
 	if r == 0 {
 		return ""
@@ -201,6 +275,10 @@ func GetClipboardData(formatId uint32) string {
 
 	h := win.GlobalHandle(uintptr(r))
 	size := win.GlobalSize(h)
+	if size == 0 {
+		glog.Info("剪贴板没有内容")
+		return "" // 如果大小为 0，直接返回空字符串
+	}
 	l := win.GlobalLock(h)
 	defer win.GlobalUnlock(h)
 
@@ -213,6 +291,7 @@ func GetClipboardData(formatId uint32) string {
 func GetFormatList(hwnd uintptr) []CliprdrFormat {
 	list := make([]CliprdrFormat, 0, 10)
 	if OpenClipboard(hwnd) {
+		defer CloseClipboard()
 		n := CountClipboardFormats()
 		if IsClipboardFormatAvailable(CF_HDROP) {
 			formatId := RegisterClipboardFormat(CFSTR_FILEDESCRIPTORW)

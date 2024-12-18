@@ -2,12 +2,17 @@ package core
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 )
 
 type ReadBytesComplete func(result []byte, err error)
 
 func StartReadBytes(len int, r io.Reader, cb ReadBytesComplete) {
+	if len <= 0 {
+		cb(nil, fmt.Errorf("length must be greater than 0"))
+		return
+	}
 	b := make([]byte, len)
 	go func() {
 		_, err := io.ReadFull(r, b)

@@ -2,10 +2,8 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"net"
-	"runtime"
 	"time"
 
 	"github.com/tomatome/grdp/plugin"
@@ -39,6 +37,7 @@ type RdpClient struct {
 	sec      *sec.Client
 	pdu      *pdu.Client
 	channels *plugin.Channels
+	ID       string
 }
 
 func NewRdpClient(host string, width, height int, logLevel glog.LEVEL) *RdpClient {
@@ -56,51 +55,51 @@ func BitmapDecompress(bitmap *pdu.BitmapData) []byte {
 	return core.Decompress(bitmap.BitmapDataStream, int(bitmap.Width), int(bitmap.Height), Bpp(bitmap.BitsPerPixel))
 }
 
-func uiRdp(info *Info) (error, *RdpClient) {
-	runtime.GOMAXPROCS(runtime.NumCPU())
+// func uiRdp(info *Info) (error, *RdpClient) {
+// 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	BitmapCH = make(chan []Bitmap, 500)
-	g := NewRdpClient(fmt.Sprintf("%s:%s", info.Ip, info.Port), info.Width, info.Height, glog.INFO)
-	g.info = info
-	err := g.Login()
-	if err != nil {
-		glog.Error("Login:", err)
-		return err, nil
-	}
-	cc := cliprdr.NewCliprdrClient()
-	g.channels.Register(cc)
+// 	BitmapCH = make(chan []Bitmap, 500)
+// 	g := NewRdpClient(fmt.Sprintf("%s:%s", info.Ip, info.Port), info.Width, info.Height, glog.INFO)
+// 	g.info = info
+// 	err := g.Login()
+// 	if err != nil {
+// 		glog.Error("Login:", err)
+// 		return err, nil
+// 	}
+// 	cc := cliprdr.NewCliprdrClient(g.mcs.ID)
+// 	g.channels.Register(cc)
 
-	g.pdu.On("error", func(e error) {
-		glog.Info("on error:", e)
-	}).On("close", func() {
-		err = errors.New("close")
-		glog.Info("on close")
-	}).On("success", func() {
-		glog.Info("on success")
-	}).On("ready", func() {
-		glog.Info("on ready")
-	}).On("bitmap", func(rectangles []pdu.BitmapData) {
-		glog.Info("Update Bitmap:", len(rectangles))
-		bs := make([]Bitmap, 0, 50)
-		for _, v := range rectangles {
-			IsCompress := v.IsCompress()
-			data := v.BitmapDataStream
-			if IsCompress {
-				data = BitmapDecompress(&v)
-				IsCompress = false
-			}
+// 	g.pdu.On("error", func(e error) {
+// 		glog.Info("on error:", e)
+// 	}).On("close", func() {
+// 		err = errors.New("close")
+// 		glog.Info("on close")
+// 	}).On("success", func() {
+// 		glog.Info("on success")
+// 	}).On("ready", func() {
+// 		glog.Info("on ready")
+// 	}).On("bitmap", func(rectangles []pdu.BitmapData) {
+// 		glog.Info("Update Bitmap:", len(rectangles))
+// 		bs := make([]Bitmap, 0, 50)
+// 		for _, v := range rectangles {
+// 			IsCompress := v.IsCompress()
+// 			data := v.BitmapDataStream
+// 			if IsCompress {
+// 				data = BitmapDecompress(&v)
+// 				IsCompress = false
+// 			}
 
-			b := Bitmap{int(v.DestLeft), int(v.DestTop), int(v.DestRight), int(v.DestBottom),
-				int(v.Width), int(v.Height), Bpp(v.BitsPerPixel), IsCompress, data}
-			bs = append(bs, b)
-		}
-		ui_paint_bitmap(bs)
-	})
+// 			b := Bitmap{int(v.DestLeft), int(v.DestTop), int(v.DestRight), int(v.DestBottom),
+// 				int(v.Width), int(v.Height), Bpp(v.BitsPerPixel), IsCompress, data}
+// 			bs = append(bs, b)
+// 		}
+// 		ui_paint_bitmap(bs)
+// 	})
 
-	return nil, g
-}
+// 	return nil, g
+// }
 
-func (g *RdpClient) Login() error {
+func (g *RdpClient) Login(id string) error {
 	domain, user, pwd := g.info.Domain, g.info.Username, g.info.Passwd
 	glog.Info("Connect:", g.Host, "with", domain+"\\"+user, ":", pwd)
 	conn, err := net.DialTimeout("tcp", g.Host, 3*time.Second)
@@ -117,7 +116,7 @@ func (g *RdpClient) Login() error {
 
 	g.mcs.SetClientDesktop(uint16(g.Width), uint16(g.Height))
 	//clipboard
-	g.channels.Register(cliprdr.NewCliprdrClient())
+	g.channels.Register(cliprdr.NewCliprdrClient(id))
 	g.mcs.SetClientCliprdr()
 
 	//remote app
