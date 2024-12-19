@@ -8,7 +8,6 @@ import (
 	"io"
 	"reflect"
 
-	"github.com/tomatome/grdp/plugin/cliprdr"
 	"github.com/tomatome/grdp/plugin/rail"
 
 	"github.com/tomatome/grdp/plugin/drdynvc"
@@ -291,9 +290,9 @@ func (c *MCSClient) SetClientRemoteProgram() {
 	c.clientNetworkData.AddVirtualChannel(rail.ChannelName, rail.ChannelOption)
 }
 
-func (c *MCSClient) SetClientCliprdr() {
-	c.clientNetworkData.AddVirtualChannel(cliprdr.ChannelName, cliprdr.ChannelOption)
-}
+// func (c *MCSClient) SetClientCliprdr() {
+// 	c.clientNetworkData.AddVirtualChannel(cliprdr.ChannelName, cliprdr.ChannelOption)
+// }
 
 func (c *MCSClient) connect(selectedProtocol uint32) {
 	glog.Debug("mcs client on connect", selectedProtocol)

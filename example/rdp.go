@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/tomatome/grdp/plugin"
-	"github.com/tomatome/grdp/plugin/cliprdr"
 
 	"github.com/tomatome/grdp/core"
 	"github.com/tomatome/grdp/glog"
@@ -116,8 +115,8 @@ func (g *RdpClient) Login(id string) error {
 
 	g.mcs.SetClientDesktop(uint16(g.Width), uint16(g.Height))
 	//clipboard
-	g.channels.Register(cliprdr.NewCliprdrClient(id))
-	g.mcs.SetClientCliprdr()
+	// g.channels.Register(cliprdr.NewCliprdrClient(id))
+	// g.mcs.SetClientCliprdr()
 
 	//remote app
 	//g.channels.Register(rail.NewClient())

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"sync"
 	"text/template"
 
 	socketio "github.com/googollee/go-socket.io"
@@ -26,11 +25,11 @@ func showPreview(w http.ResponseWriter, r *http.Request) {
 
 }
 
-var (
-	clients   = make([]*RdpClient, 0)
-	clientsMu sync.Mutex
-	activeId  string
-)
+// var (
+// 	clients   = make([]*RdpClient, 0)
+// 	clientsMu sync.Mutex
+// 	activeId  string
+// )
 
 func socketIO() {
 	server, _ := socketio.NewServer(nil)
@@ -52,20 +51,20 @@ func socketIO() {
 		g.info = &info
 
 		// 移除其他实例的剪贴板监听
-		closeClientsEventListener(g.ID)
+		// closeClientsEventListener(g.ID)
 		err := g.Login(soId)
 		if err != nil {
 			fmt.Println("Login:", err)
 			so.Emit("rdp-error", "{\"code\":1,\"message\":\""+err.Error()+"\"}")
 			return
 		}
-		activeId = soId
+		// activeId = soId
 		so.SetContext(g)
 
 		// 将rdp实例添加到切片中
-		clientsMu.Lock()
-		clients = append(clients, g)
-		clientsMu.Unlock()
+		// clientsMu.Lock()
+		// clients = append(clients, g)
+		// clientsMu.Unlock()
 
 		g.pdu.On("error", func(e error) {
 			fmt.Println("on error:", e)
@@ -78,40 +77,40 @@ func socketIO() {
 		}).On("ready", func() {
 			fmt.Println("on ready")
 		}).On("bitmap", func(rectangles []pdu.BitmapData) {
-			if activeId == so.ID() {
-				// glog.Info(time.Now(), "on update Bitmap:", len(rectangles))
-				bs := make([]Bitmap, 0, len(rectangles))
-				for _, v := range rectangles {
-					IsCompress := v.IsCompress()
-					data := v.BitmapDataStream
-					glog.Debug("data:", data)
-					if IsCompress {
-						//data = decompress(&v)
-						//IsCompress = false
-					}
-
-					glog.Debug(IsCompress, v.BitsPerPixel)
-					b := Bitmap{int(v.DestLeft), int(v.DestTop), int(v.DestRight), int(v.DestBottom),
-						int(v.Width), int(v.Height), int(v.BitsPerPixel), IsCompress, data}
-					// so.Emit("rdp-bitmap", []Bitmap{b})
-					bs = append(bs, b)
+			// if activeId == so.ID() {
+			// glog.Info(time.Now(), "on update Bitmap:", len(rectangles))
+			bs := make([]Bitmap, 0, len(rectangles))
+			for _, v := range rectangles {
+				IsCompress := v.IsCompress()
+				data := v.BitmapDataStream
+				glog.Debug("data:", data)
+				if IsCompress {
+					//data = decompress(&v)
+					//IsCompress = false
 				}
-				so.Emit("rdp-bitmap", bs)
+
+				glog.Debug(IsCompress, v.BitsPerPixel)
+				b := Bitmap{int(v.DestLeft), int(v.DestTop), int(v.DestRight), int(v.DestBottom),
+					int(v.Width), int(v.Height), int(v.BitsPerPixel), IsCompress, data}
+				// so.Emit("rdp-bitmap", []Bitmap{b})
+				bs = append(bs, b)
 			}
+			so.Emit("rdp-bitmap", bs)
+			// }
 		})
 	})
 
 	server.OnEvent("/", "mouse", func(so socketio.Conn, x, y uint16, button int, isPressed bool) {
 		// glog.Info("mouse", x, ":", y, ":", button, ":", isPressed)
-		if isPressed {
-			id := so.ID()
-			if activeId != id {
-				activeId = so.ID()
-				// 移除其他实例的剪贴板监听
-				closeClientsEventListener(activeId)
-				openClientsEventListener(activeId)
-			}
-		}
+		// if isPressed {
+		// 	id := so.ID()
+		// 	if activeId != id {
+		// 		activeId = so.ID()
+		// 		// 移除其他实例的剪贴板监听
+		// 		// closeClientsEventListener(activeId)
+		// 		// openClientsEventListener(activeId)
+		// 	}
+		// }
 		p := &pdu.PointerEvent{}
 		if isPressed {
 			p.PointerFlags |= pdu.PTRFLAGS_DOWN
@@ -137,25 +136,24 @@ func socketIO() {
 	//keyboard
 	server.OnEvent("/", "scancode", func(so socketio.Conn, button uint16, isPressed bool) {
 		glog.Info("scancode:", "button:", button, "isPressed:", isPressed)
-		if activeId == so.ID() {
-			p := &pdu.ScancodeKeyEvent{}
-			p.KeyCode = button
-			if !isPressed {
-				p.KeyboardFlags |= pdu.KBDFLAGS_RELEASE
-			}
-			g := so.Context().(*RdpClient)
-			g.pdu.SendInputEvents(pdu.INPUT_EVENT_SCANCODE, []pdu.InputEventsInterface{p})
+		// if activeId == so.ID() {
+		p := &pdu.ScancodeKeyEvent{}
+		p.KeyCode = button
+		if !isPressed {
+			p.KeyboardFlags |= pdu.KBDFLAGS_RELEASE
 		}
-
+		g := so.Context().(*RdpClient)
+		g.pdu.SendInputEvents(pdu.INPUT_EVENT_SCANCODE, []pdu.InputEventsInterface{p})
+		// }
 	})
 
 	//wheel
 	server.OnEvent("/", "wheel", func(so socketio.Conn, x, y, step uint16, isNegative, isHorizontal bool) {
 		glog.Info("Received wheel event", x, ":", y, ":", step, ":", isNegative, ":", isHorizontal)
-		id := so.ID()
-		if activeId != id {
-			activeId = so.ID()
-		}
+		// id := so.ID()
+		// if activeId != id {
+		// 	activeId = so.ID()
+		// }
 		var p = &pdu.PointerEvent{}
 
 		if isHorizontal {
@@ -201,7 +199,7 @@ func socketIO() {
 			fmt.Println("Context is nil")
 			return
 		}
-		soId := so.ID()
+		// soId := so.ID()
 		// 处理错误
 		fmt.Println("Error occurred:", err)
 		fmt.Println("error:", err)
@@ -209,14 +207,14 @@ func socketIO() {
 		g := so.Context().(*RdpClient)
 		if g != nil {
 			// g.x224.Close()
-			g.channels.Close()
+			// g.channels.Close()
 			g.mcs.Close()
 			g.sec.Close()
 			// g.pdu.Close()
 			g.tpkt.Close()
 		}
 		so.Close()
-		deleteClient(soId)
+		// deleteClient(soId)
 	})
 
 	server.OnDisconnect("/", func(so socketio.Conn, s string) {
@@ -236,15 +234,14 @@ func socketIO() {
 		g := so.Context().(*RdpClient)
 		if g != nil {
 			// 移除监听
-			g.channels.Close()
 			g.mcs.Close()
 			g.sec.Close()
 			// g.pdu.Close()
-			g.channels.Close()
+			// g.channels.Close()
 			g.tpkt.Close()
 		}
 		so.Close()
-		deleteClient(so.ID())
+		// deleteClient(so.ID())
 	})
 	go server.Serve()
 	// defer server.Close()
@@ -262,35 +259,35 @@ func socketIO() {
 }
 
 // 移除其他实例的clipboard监听
-func closeClientsEventListener(id string) {
-	clientsMu.Lock()
-	defer clientsMu.Unlock()
-	for _, client := range clients {
-		if client.ID != id {
-			client.channels.RemoveListen()
-		}
-	}
-}
+// func closeClientsEventListener(id string) {
+// 	clientsMu.Lock()
+// 	defer clientsMu.Unlock()
+// 	for _, client := range clients {
+// 		if client.ID != id {
+// 			client.channels.RemoveListen()
+// 		}
+// 	}
+// }
 
-// 打开实例的clipboard监听
-func openClientsEventListener(id string) {
-	clientsMu.Lock()
-	defer clientsMu.Unlock()
-	for _, client := range clients {
-		if client.ID == id {
-			client.channels.RestartListen()
-		}
-	}
-}
+// // 打开实例的clipboard监听
+// func openClientsEventListener(id string) {
+// 	clientsMu.Lock()
+// 	defer clientsMu.Unlock()
+// 	for _, client := range clients {
+// 		if client.ID == id {
+// 			client.channels.RestartListen()
+// 		}
+// 	}
+// }
 
-// 删除实例
-func deleteClient(id string) {
-	clientsMu.Lock()
-	defer clientsMu.Unlock()
-	for i, client := range clients {
-		if client.ID == id {
-			clients = append(clients[:i], clients[i+1:]...)
-			break
-		}
-	}
-}
+// // 删除实例
+// func deleteClient(id string) {
+// 	clientsMu.Lock()
+// 	defer clientsMu.Unlock()
+// 	for i, client := range clients {
+// 		if client.ID == id {
+// 			clients = append(clients[:i], clients[i+1:]...)
+// 			break
+// 		}
+// 	}
+// }
