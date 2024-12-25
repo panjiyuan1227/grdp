@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
-	"text/template"
+	"net/http/httputil"
+	"net/url"
 
 	socketio "github.com/googollee/go-socket.io"
 	"github.com/tomatome/grdp/glog"
@@ -15,14 +17,31 @@ import (
 )
 
 func showPreview(w http.ResponseWriter, r *http.Request) {
-	t, err := template.ParseFiles("static/html/index.html")
+	// t, err := template.ParseFiles("static/html/index.html")
+	// if err != nil {
+	// 	w.Write([]byte(err.Error() + "\n"))
+	// 	return
+	// }
+	// w.Header().Add("Content-Type", "text/html")
+	// t.Execute(w, nil)
+
+	resp, err := http.Get("http://localhost:34118/grdp/html/index.html")
 	if err != nil {
 		w.Write([]byte(err.Error() + "\n"))
 		return
 	}
-	w.Header().Add("Content-Type", "text/html")
-	t.Execute(w, nil)
+	defer resp.Body.Close()
 
+	// 读取 HTML 文件内容
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		w.Write([]byte(err.Error() + "\n"))
+		return
+	}
+
+	// 设置响应头并写入内容
+	w.Header().Add("Content-Type", "text/html")
+	w.Write(body)
 }
 
 // var (
@@ -244,14 +263,19 @@ func socketIO() {
 		// deleteClient(so.ID())
 	})
 	go server.Serve()
-	// defer server.Close()
+	defer server.Close()
 
+	staticProxy, err := url.Parse("http://localhost:34118/grdp")
+	if err != nil {
+		log.Fatalf("Failed to parse URL: %v", err)
+	}
+	proxy := httputil.NewSingleHostReverseProxy(staticProxy)
 	http.Handle("/socket.io/", server)
 
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
-	http.Handle("/css/", http.FileServer(http.Dir("static")))
-	http.Handle("/js/", http.FileServer(http.Dir("static")))
-	http.Handle("/img/", http.FileServer(http.Dir("static")))
+	http.Handle("/static/", http.StripPrefix("/static/", proxy))
+	http.Handle("/css/", proxy)
+	http.Handle("/js/", proxy)
+	http.Handle("/img/", proxy)
 	http.HandleFunc("/", showPreview)
 
 	log.Println("Serving at localhost:8088...")
